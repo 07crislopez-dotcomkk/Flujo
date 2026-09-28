@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis 5 sábados</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#17171b;color:#e9e9ee;font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;min-height:100vh}
+  header{padding:16px 18px 10px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+  h1{font-size:1.3rem;font-weight:700}
+  .ctl{font-size:.85rem;color:#a9a9b6;display:flex;align-items:center;gap:8px}
+  select{background:#26262d;color:#e9e9ee;border:1px solid #3a3a45;border-radius:8px;padding:6px 10px;font:inherit}
+  select:focus-visible{outline:2px solid #7aa2ff}
+  .scroll{overflow:auto;padding:0 0 30px}
+  .canvas{position:relative;width:960px;height:790px;margin:0 auto;
+    background-color:#1f1f24;
+    background-image:radial-gradient(#3a3a44 1px,transparent 1px);
+    background-size:16px 16px;border-radius:16px;border:1px solid #2c2c34}
+  svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .node{position:absolute;background:#2b2b32;border:2px solid #4a4a56;border-radius:14px}
+  .lbl{position:absolute;text-align:center;font-size:.85rem;color:#e9e9ee;line-height:1.2}
+  .lbl small{display:block;color:#8d8d9a;font-size:.72rem;margin-top:2px}
+
+  .trigger{left:30px;top:340px;width:100px;height:80px;border-radius:40px 14px 14px 40px;display:flex;align-items:center;justify-content:center;font-size:2rem;border-color:#8b8b98}
+  .switch{left:230px;top:290px;width:90px;height:180px;display:flex;align-items:center;justify-content:center;font-size:2.2rem;border-color:#8b8b98}
+  .out{position:absolute;left:316px;width:10px;height:10px;border-radius:50%;background:#8b8b98}
+  .br{position:absolute;left:334px;font-size:.72rem;color:#9a9aa8;white-space:nowrap}
+
+  .card{left:500px;width:250px;padding:12px 14px;min-height:118px}
+  .card.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent)}
+  .card h2{font-size:.98rem;display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .card ul{list-style:none;font-size:.8rem;color:#c4c4cf}
+  .card li{padding-left:14px;position:relative;margin:2px 0}
+  .card li:before{content:"";position:absolute;left:2px;top:.5em;width:5px;height:5px;border-radius:50%;background:var(--c)}
+  .badge{position:absolute;top:-11px;right:12px;background:var(--c);color:#fff;font-size:.7rem;font-weight:700;padding:2px 10px;border-radius:99px}
+  .sub{left:800px;width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.7rem}
+  .sublbl{left:770px;width:130px}
+  .conn-dot{position:absolute;width:10px;height:10px;border-radius:50%;background:#8b8b98}
+  .legend{max-width:960px;margin:12px auto 0;padding:0 18px;font-size:.82rem;color:#8d8d9a}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mis 5 sábados</h1>
+  <label class="ctl" for="startSel">El próximo sábado me toca:
+    <select id="startSel"></select>
+  </label>
+</header>
+
+<div class="scroll">
+  <div class="canvas" id="canvas">
+    <svg id="svg" viewBox="0 0 960 790" preserveAspectRatio="none"></svg>
+  </div>
+  <p class="legend">Desliza para ver todo el diagrama. Cada sábado sigue una rama distinta; al terminar la quinta se vuelve a empezar.</p>
+</div>
+
+<script>
+const H = [
+  { ico:'💻', name:'Programar', c:'#5B86FF',
+    tasks:['Una lección de Innovatic','Entender código'],
+    sub:['📚','Curso Innovatic'] },
+  { ico:'📈', name:'Finanzas, negocios y economía', c:'#2FCB8B',
+    tasks:['Una lección de Bizen','Practicar en apps de finanzas','Repasar hojas'],
+    sub:['🎓','Curso Bizen'] },
+  { ico:'🗺️', name:'Historia y geografía', c:'#E7A93A',
+    tasks:['Aprende algo nuevo','Repasar hojas'],
+    sub:['📝','Mis hojas'] },
+  { ico:'🇫🇷', name:'Francés', c:'#FF6B93',
+    tasks:['Empezar desde cero','Saludos y pronunciación','Elegir un curso o app'],
+    sub:['🆕','Por elegir'] },
+  { ico:'🇺🇸', name:'Inglés', c:'#A883FF',
+    tasks:['Hablar 45 min en inglés con ChatGPT','Anotar palabras y errores nuevos','Repasar hojas'],
+    sub:['💬','ChatGPT · 45 min'] }
+];
+
+const cv = document.getElementById('canvas');
+const svg = document.getElementById('svg');
+let start = 0;
+
+function nextSaturday(){
+  const d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+  return d;
+}
+function fmt(d){ return d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}); }
+
+function el(html){ const t=document.createElement('div'); t.innerHTML=html.trim(); return t.firstChild; }
+
+function draw(){
+  // limpiar
+  [...cv.children].forEach(n=>{ if(n.id!=='svg') n.remove(); });
+  let paths = '';
+
+  // Trigger
+  cv.appendChild(el('<div class="node trigger" aria-hidden="true">📅</div>'));
+  cv.appendChild(el('<div class="lbl" style="left:10px;top:428px;width:140px">Cada sábado<small>Empieza aquí</small></div>'));
+
+  // Switch
+  cv.appendChild(el('<div class="node switch" aria-hidden="true">🔀</div>'));
+  cv.appendChild(el('<div class="lbl" style="left:215px;top:478px;width:120px">¿Cuál me toca?<small>rotación de 5</small></div>'));
+
+  // trigger -> switch
+  paths += '<path d="M132 380 H230" stroke="#8b8b98" stroke-width="2" fill="none"/>';
+  cv.appendChild(el('<div class="conn-dot" style="left:127px;top:375px"></div>'));
+
+  const base = nextSaturday();
+  const top0 = 20, gap = 150;
+
+  H.forEach((h,i)=>{
+    const y = top0 + i*gap;
+    const outY = 316 + i*36;
+    const offset = (i - start + 5) % 5;
+    const d = new Date(base); d.setDate(d.getDate() + offset*7);
+    const active = offset === 0;
+
+    // salida del switch
+    cv.appendChild(el(`<div class="out" style="top:${outY-5}px"></div>`));
+    cv.appendChild(el(`<div class="br" style="top:${outY-9}px">Sáb ${fmt(d)}</div>`));
+
+    // conexión switch -> card
+    const x1=326, x2=500, y2=y+59;
+    const col = active ? h.c : '#666672';
+    paths += `<path d="M${x1} ${outY} C ${x1+90} ${outY}, ${x2-90} ${y2}, ${x2} ${y2}" stroke="${col}" stroke-width="${active?3:2}" fill="none"/>`;
+
+    // tarjeta
+    const card = el(`<div class="node card ${active?'on':''}" style="top:${y}px;border-color:${active?h.c:'#4a4a56'};--c:${h.c}">
+      ${active?'<span class="badge">Este sábado</span>':''}
+      <h2><span>${h.ico}</span><span>${h.name}</span></h2>
+      <ul>${h.tasks.map(t=>'<li></li>').join('')}</ul>
+    </div>`);
+    [...card.querySelectorAll('li')].forEach((li,k)=>li.textContent=h.tasks[k]);
+    cv.appendChild(card);
+    cv.appendChild(el(`<div class="conn-dot" style="left:${x2-5}px;top:${y2-5}px;background:${col}"></div>`));
+
+    // sub-nodo punteado
+    const sy = y + 24;
+    paths += `<path d="M750 ${y+59} C 775 ${y+59}, 780 ${sy+35}, 800 ${sy+35}" stroke="#8b8b98" stroke-width="2" stroke-dasharray="5 5" fill="none"/>`;
+    cv.appendChild(el(`<div class="node sub" style="top:${sy}px;border-color:${active?h.c:'#4a4a56'}">${h.sub[0]}</div>`));
+    cv.appendChild(el(`<div class="lbl sublbl" style="top:${sy+76}px">${h.sub[1]}</div>`));
+  });
+
+  svg.innerHTML = paths;
+}
+
+const sel = document.getElementById('startSel');
+H.forEach((h,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=h.ico+' '+h.name; sel.appendChild(o); });
+sel.onchange = e=>{ start = +e.target.value; draw(); };
+draw();
+</script>
+</body>
+</html>
